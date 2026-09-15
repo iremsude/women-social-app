@@ -7,7 +7,7 @@ function Feed() {
   const [editingPostId, setEditingPostId] = useState(null);
   const [editedContent, setEditedContent] = useState("");
   const [sortOrder, setSortOrder] = useState("old");
-  async function fetchPosts() {
+  /*async function fetchPosts() {
     const { data, error } = await supabase
       .from("posts")
       .select("*")
@@ -19,8 +19,29 @@ function Feed() {
       console.log("data:", data);
       setPosts(data);
     }
-  }
-  async function updatePost() {
+  }*/
+ async function fetchPosts() {
+    const { data, error } = await supabase
+    .from("posts")
+    .select(`
+        id,
+        content,
+        profiles(
+            username,
+            bio
+        )`)
+              .order("id", { ascending: sortOrder === "old" });
+
+        if (error) {
+      console.log("error:", error);
+    }
+    if (data) {
+      console.log("data:", data);
+      setPosts(data)
+ }
+}
+
+    async function updatePost() {
     const { error } = await supabase
       .from("posts")
       .update({ content: editedContent })
@@ -93,6 +114,8 @@ function Feed() {
             ) : (
               <div className="flex items-center gap-4">
                 <p>{post.content}</p>
+                <p>by: {post.profiles?.username}</p>
+                <p>{post.profiles?.bio}</p>
                 <button
                   onClick={() => {
                     setEditingPostId(post.id);
@@ -115,6 +138,7 @@ function Feed() {
         ></input>
         <button onClick={addPost}>Add Post</button>
       </div>
+       
     </>
   );
 }
