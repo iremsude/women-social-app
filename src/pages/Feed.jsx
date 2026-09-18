@@ -1,8 +1,18 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
-import { Ellipsis, MessageCircle } from "lucide-react";
+import { Ellipsis, MessageCircle, Trash, SendHorizontal } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import {} from "lucide-react";
+
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
 function Feed() {
@@ -11,6 +21,9 @@ function Feed() {
   const [editingPostId, setEditingPostId] = useState(null);
   const [editedContent, setEditedContent] = useState("");
   const [sortOrder, setSortOrder] = useState("old");
+  const [commentPostId, setCommentPostId] = useState(null);
+  const [newComment, setNewComment] = useState("");
+  const [user, setUser] = useState(null);
   /*async function fetchPosts() {
     const { data, error } = await supabase
       .from("posts")
@@ -24,28 +37,40 @@ function Feed() {
       setPosts(data);
     }
   }*/
- async function fetchPosts() {
+  async function fetchPosts() {
     const { data, error } = await supabase
-    .from("posts")
-    .select(`
+      .from("posts")
+      .select(
+        `
         id,
         content,
         profiles(
             username,
             bio
-        )`)
-              .order("id", { ascending: sortOrder === "old" });
+        ),
+        comments(
+            content,
+            id,
+            user_id,
+            profiles(
+                username
+            )
+        )
+            
+        `,
+      )
+      .order("id", { ascending: sortOrder === "old" });
 
-        if (error) {
+    if (error) {
       console.log("error:", error);
     }
     if (data) {
       console.log("data:", data);
-      setPosts(data)
- }
-}
+      setPosts(data);
+    }
+  }
 
-    async function updatePost() {
+  async function updatePost() {
     const { error } = await supabase
       .from("posts")
       .update({ content: editedContent })
@@ -58,31 +83,74 @@ function Feed() {
       setEditedContent("");
     }
   }
-
-  useEffect(() => {
-    fetchPosts();
-  }, [sortOrder]);
+  async function addComment(postId) {
+    const { data, error: userError } = await supabase.auth.getUser();
+    if (!newComment.trim()) {
+      return;
+    }
+    if (userError) {
+      console.log("error:", userError);
+      return;
+    }
+    if (data.user) {
+      const { error } = await supabase.from("comments").insert({
+        content: newComment,
+        post_id: postId,
+        user_id: data.user.id,
+      });
+      if (error) {
+        console.log("error:", error);
+      } else {
+        setNewComment("");
+        setCommentPostId(null);
+        fetchPosts();
+      }
+    }
+  }
+  async function deleteComment(commentId) {
+    const { error } = await supabase
+      .from("comments")
+      .delete()
+      .eq("id", commentId);
+    if (error) {
+      console.log("error:", error);
+    } else {
+      fetchPosts();
+    }
+  }
+  
+    useEffect(() => {
+        supabase.auth.getUser().then(({ data, error }) => {
+        if (error) {
+            console.error("Error fetching user:", error);
+        } else {
+            setUser(data.user);
+    //     console.log("User fetched successfully:", data.user);
+        }
+        });     
+        fetchPosts();
+    }, [sortOrder]);
 
   async function addPost() {
     console.log("ADD POST:", JSON.stringify(newPost));
     if (!newPost.trim()) {
       return;
     }
-    const { data, error: userError } = await supabase.auth.getUser()    
+    const { data, error: userError } = await supabase.auth.getUser();
     if (userError) {
       console.log("error:", userError);
       return;
-    } else if(data.user){
-    const { error } = await supabase.from("posts").insert({
-      content: newPost,
-      user_id: data.user.id,
-    });
-    if (error) {
-      console.log("error:", error);
-    } else {
-      fetchPosts();
-    }
-    setNewPost("");
+    } else if (data.user) {
+      const { error } = await supabase.from("posts").insert({
+        content: newPost,
+        user_id: data.user.id,
+      });
+      if (error) {
+        console.log("error:", error);
+      } else {
+        fetchPosts();
+      }
+      setNewPost("");
     }
   }
   async function deletePost(postId) {
@@ -107,114 +175,150 @@ function Feed() {
       </div>
       <div className="divide-y divide-border">
         {posts.map((post) => (
-          <article
+          <Card
             key={post.id}
-            className="rounded-none border-x-0 border-t-0 bg-background px-4 py-4 shadow-none transition-colors hover:bg-muted/30"
+            className="gap-0 rounded-none bg-background py-4 shadow-none ring-0 transition-colors hover:bg-muted/30"
           >
-            {editingPostId === post.id ? (
-              <div className="flex gap-3">
-                <Avatar className="size-10">
-                  <AvatarFallback>
-                    {post.profiles?.username?.charAt(0)?.toUpperCase() || "U"}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="min-w-0 flex-1 space-y-3">
-                  <input
-                    value={editedContent}
-                    onChange={(e) => setEditedContent(e.target.value)}
-                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                  />
-                  <Button onClick={updatePost}>Save</Button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex gap-3">
-                <Avatar className="size-10">
-                  <AvatarFallback>
-                    {post.profiles?.username?.charAt(0)?.toUpperCase() || "U"}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-x-1.5 text-sm leading-5">
-                        <span className="font-semibold text-foreground">
-                          {post.profiles?.bio ||
-                            post.profiles?.username ||
-                            "Kullanıcı"}
-                        </span>
-                        <span className="text-muted-foreground">
-                          @{post.profiles?.username || "username"}
-                        </span>
-                        <span className="text-muted-foreground">·</span>
-                        <span className="text-muted-foreground">şimdi</span>
-                      </div>
-                    </div>
-                    <div className="group relative shrink-0">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        className="text-muted-foreground hover:text-foreground"
-                        aria-label="Post seçenekleri"
-                      >
-                        <Ellipsis className="h-4 w-4" />
-                      </Button>
-                      <div className="absolute right-0 top-8 z-20 hidden w-32 overflow-hidden rounded-md border border-border bg-popover p-1 text-popover-foreground group-hover:block group-focus-within:block">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="w-full justify-start"
-                          onClick={() => {
-                            setEditingPostId(post.id);
-                            setEditedContent(post.content);
-                          }}
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="w-full justify-start text-destructive hover:text-destructive"
-                          onClick={() => deletePost(post.id)}
-                        >
-                          Delete
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                  <p className="mt-2 whitespace-pre-wrap break-words text-[15px] leading-6 text-foreground">
-                    {post.content}
-                  </p>
-                  <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
-                    <MessageCircle className="h-4 w-4" />
-                    <span>Yorumlar</span>
-                  </div>
-                  <div className="mt-3 border-t border-border pt-3">
-                    <Textarea
-                      placeholder="Yorum yaz..."
-                      disabled
-                      className="min-h-10 resize-none border-border bg-muted/20 shadow-none"
+            <CardContent className="px-4">
+              {editingPostId === post.id ? (
+                <div className="flex gap-3">
+                  <Avatar className="size-10">
+                    <AvatarFallback>
+                      {post.profiles?.username?.charAt(0)?.toUpperCase() || "U"}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0 flex-1 space-y-3">
+                    <Input
+                      value={editedContent}
+                      onChange={(e) => setEditedContent(e.target.value)}
+                      className="h-10 bg-background"
                     />
+                    <Button onClick={updatePost}>Save</Button>
                   </div>
                 </div>
-              </div>
-            )}
-          </article>
+              ) : (
+                <div className="flex gap-3">
+                  <Avatar className="size-10">
+                    <AvatarFallback>
+                      {post.profiles?.username?.charAt(0)?.toUpperCase() || "U"}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-x-1.5 text-sm leading-5">
+                          <span className="font-semibold text-foreground">
+                            {post.profiles?.bio ||
+                              post.profiles?.username ||
+                              "Kullanıcı"}
+                          </span>
+                          <span className="text-muted-foreground">
+                            @{post.profiles?.username || "username"}
+                          </span>
+                          <span className="text-muted-foreground">·</span>
+                          <span className="text-muted-foreground">şimdi</span>
+                        </div>
+                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
+                          render={
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-sm"
+                              className="shrink-0 text-muted-foreground hover:text-foreground"
+                              aria-label="Post seçenekleri"
+                            />
+                          }
+                        >
+                          <Ellipsis className="h-4 w-4" />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-32">
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setEditingPostId(post.id);
+                              setEditedContent(post.content);
+                            }}
+                          >
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            variant="destructive"
+                            onClick={() => deletePost(post.id)}
+                          >
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                    <p className="mt-2 whitespace-pre-wrap break-words text-[15px] leading-6 text-foreground">
+                      {post.content}
+                    </p>
+                    <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+                      <MessageCircle className="h-4 w-4" />
+                      <span>Yorumlar</span>
+                    </div>
+                    <div className="mt-3 border-t border-border pt-3">
+                      <div>
+                        {post.comments.map((comment) => (
+                          <div
+                            key={comment.id}
+                            className="flex items-center justify-between gap-2"
+                          >
+                            <p
+                              key={comment.id}
+                              className="text-sm text-muted-foreground"
+                            >
+                              {comment.content} - by:{" "}
+                              {comment.profiles?.username || "Unknown"}
+                            </p>
+                            {(comment.user_id === user.id) && (
+                              <Trash
+                                className="h-4 w-4 text-muted-foreground hover:text-red-500 cursor-pointer"
+                                onClick={() => deleteComment(comment.id)}
+                              />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <div className="relative">
+                        <Input
+                          onFocus={() => setCommentPostId(post.id)}
+                          value={commentPostId === post.id ? newComment : ""}
+                          onChange={(e) => {
+                            setCommentPostId(post.id);
+                            setNewComment(e.target.value);
+                          }}
+                          placeholder="Yorum yaz..."
+                          type="text"
+                          className="min-h-10 resize-none border-border bg-muted/20 pr-12 shadow-none"
+                        />
+                        <Button
+                          onClick={() => addComment(post.id)}
+                          className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center bg-black text-white"
+                        >
+                          <SendHorizontal className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         ))}
       </div>
       <div className="border-t border-border p-4">
-        <input
+        <Input
           type="text"
           value={newPost}
           onChange={(e) => setNewPost(e.target.value)}
-          className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-        ></input>
+          className="h-10 bg-background"
+        />
         <Button onClick={addPost} className="mt-3">
           Add Post
         </Button>
       </div>
-       
     </main>
   );
 }
