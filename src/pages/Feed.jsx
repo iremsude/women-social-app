@@ -1,6 +1,12 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
-import { Ellipsis, MessageCircle, Trash, SendHorizontal } from "lucide-react";
+import {
+  Ellipsis,
+  Heart,
+  MessageCircle,
+  Trash,
+  SendHorizontal,
+} from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -22,6 +28,9 @@ function Feed() {
   const [commentPostId, setCommentPostId] = useState(null);
   const [newComment, setNewComment] = useState("");
   const [user, setUser] = useState(null);
+  
+
+
   /*async function fetchPosts() {
     const { data, error } = await supabase
       .from("posts")
@@ -53,6 +62,9 @@ function Feed() {
             profiles(
                 username
             )
+        ),
+        likes(
+             user_id
         )
             
         `,
@@ -174,6 +186,22 @@ function Feed() {
     }
   }
 
+  async function deleteLike(postId) {
+  if (!user) return
+
+  const { error } = await supabase
+    .from("likes")
+    .delete()
+    .eq("post_id", postId)
+    .eq("user_id", user.id)
+
+  if (error) {
+    console.log("error:", error)
+  } else {
+    fetchPosts()
+  }
+}
+
   return (
     <main className="min-h-svh bg-background text-left text-foreground">
       <div className="sticky top-0 z-10 border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
@@ -187,7 +215,12 @@ function Feed() {
         </select>
       </div>
       <div className="divide-y divide-border">
-        {posts.map((post) => (
+        {posts.map((post) => {
+  const isLiked = post.likes.some(
+    (like) => like.user_id === user?.id
+  )
+  console.log(post.id, isLiked)
+           return ( 
           <Card
             key={post.id}
             className="gap-0 rounded-none bg-background py-4 shadow-none ring-0 transition-colors hover:bg-muted/30"
@@ -267,9 +300,28 @@ function Feed() {
                     <p className="mt-2 whitespace-pre-wrap break-words text-[15px] leading-6 text-foreground">
                       {post.content}
                     </p>
-                    <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
-                      <MessageCircle className="h-4 w-4" />
-                      <span>Yorumlar</span>
+                    <div className="mt-4 flex items-center gap-4 text-sm text-muted-foreground">
+                     <div className="flex items-center ">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        className="hover:text-red-500"
+                        onClick={() =>{if (isLiked) {
+    deleteLike(post.id)
+  } else {
+    addLike(post.id)
+  }
+} }>
+                        <Heart className="h-4 w-4 "
+                        fill={isLiked ? "#bb0a1e" : "none"} />
+                      </Button>
+                        <span className="ml-1">{post.likes.length}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <MessageCircle className="h-4 w-4" />
+                        <span>Yorumlar</span>
+                      </div>
                     </div>
                     <div className="mt-3 border-t border-border pt-3">
                       <div>
@@ -319,7 +371,7 @@ function Feed() {
               )}
             </CardContent>
           </Card>
-        ))}
+ )} )}
       </div>
       <div className="border-t border-border p-4">
         <Input
