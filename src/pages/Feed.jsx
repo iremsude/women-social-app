@@ -4,8 +4,6 @@ import { Ellipsis, MessageCircle, Trash, SendHorizontal } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import {} from "lucide-react";
-
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -69,7 +67,42 @@ function Feed() {
       setPosts(data);
     }
   }
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data, error }) => {
+      if (error) {
+        console.error("Error fetching user:", error);
+      } else {
+        setUser(data.user);
+        //     console.log("User fetched successfully:", data.user);
+      }
+    });
+    fetchPosts();
+  }, []);
+  useEffect(() => {
+    fetchPosts();
+  }, [sortOrder]);
 
+  async function addPost() {
+    console.log("ADD POST:", JSON.stringify(newPost));
+    if (!newPost.trim()) {
+      return;
+    }
+    if (!user) {
+      console.log("error: No user found");
+      return;
+    }
+    const { error } = await supabase.from("posts").insert({
+      content: newPost,
+      user_id: user.id,
+    });
+    if (error) {
+      console.log("error:", error);
+    } else {
+      fetchPosts();
+      setNewPost("");
+
+    }
+  }
   async function updatePost() {
     const { error } = await supabase
       .from("posts")
@@ -83,28 +116,33 @@ function Feed() {
       setEditedContent("");
     }
   }
+  async function deletePost(postId) {
+    const { error } = await supabase.from("posts").delete().eq("id", postId);
+    if (error) {
+      console.log("error:", error);
+    } else {
+      fetchPosts();
+    }
+  }
+
   async function addComment(postId) {
-    const { data, error: userError } = await supabase.auth.getUser();
     if (!newComment.trim()) {
       return;
     }
-    if (userError) {
-      console.log("error:", userError);
+    if (!user) {
       return;
     }
-    if (data.user) {
-      const { error } = await supabase.from("comments").insert({
-        content: newComment,
-        post_id: postId,
-        user_id: data.user.id,
-      });
-      if (error) {
-        console.log("error:", error);
-      } else {
-        setNewComment("");
-        setCommentPostId(null);
-        fetchPosts();
-      }
+    const { error } = await supabase.from("comments").insert({
+      content: newComment,
+      post_id: postId,
+      user_id: user.id,
+    });
+    if (error) {
+      console.log("error:", error);
+    } else {
+      setNewComment("");
+      setCommentPostId(null);
+      fetchPosts();
     }
   }
   async function deleteComment(commentId) {
@@ -118,49 +156,24 @@ function Feed() {
       fetchPosts();
     }
   }
-  
-    useEffect(() => {
-        supabase.auth.getUser().then(({ data, error }) => {
-        if (error) {
-            console.error("Error fetching user:", error);
-        } else {
-            setUser(data.user);
-    //     console.log("User fetched successfully:", data.user);
-        }
-        });     
-        fetchPosts();
-    }, [sortOrder]);
 
-  async function addPost() {
-    console.log("ADD POST:", JSON.stringify(newPost));
-    if (!newPost.trim()) {
-      return;
-    }
-    const { data, error: userError } = await supabase.auth.getUser();
-    if (userError) {
-      console.log("error:", userError);
-      return;
-    } else if (data.user) {
-      const { error } = await supabase.from("posts").insert({
-        content: newPost,
-        user_id: data.user.id,
+  async function addLike(postId) {
+    if (!user) return;
+
+    if (user) {
+      const { error } = await supabase.from("likes").insert({
+        post_id: postId,
+        user_id: user.id,
       });
       if (error) {
         console.log("error:", error);
       } else {
+        console.log("Like added successfully", postId, user.id);
         fetchPosts();
       }
-      setNewPost("");
     }
   }
-  async function deletePost(postId) {
-    const { error } = await supabase.from("posts").delete().eq("id", postId);
-    if (error) {
-      console.log("error:", error);
-    } else {
-      fetchPosts();
-    }
-  }
+
   return (
     <main className="min-h-svh bg-background text-left text-foreground">
       <div className="sticky top-0 z-10 border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
@@ -272,7 +285,7 @@ function Feed() {
                               {comment.content} - by:{" "}
                               {comment.profiles?.username || "Unknown"}
                             </p>
-                            {(comment.user_id === user.id) && (
+                            {comment.user_id === user?.id && (
                               <Trash
                                 className="h-4 w-4 text-muted-foreground hover:text-red-500 cursor-pointer"
                                 onClick={() => deleteComment(comment.id)}
